@@ -1,8 +1,10 @@
 from pydantic import BaseModel
 
-class ChatRequest(BaseModel):
-    message: str
 
 class ChatResponse(BaseModel):
     reply: str
     stress_score: int
+
+
+class ChatRequest(BaseModel):
+    message: str
