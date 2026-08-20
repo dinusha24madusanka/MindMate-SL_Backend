@@ -14,11 +14,24 @@ from transformers import (
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-INTENT_MODEL_DIR = (
+LOCAL_INTENT_MODEL_DIR = (
     PROJECT_ROOT
     / "models"
     / "intent"
 )
+
+# Public Hugging Face repository used by cloud deployments.
+HF_INTENT_REPO = "Dinusha1234/MindMate-SL-XLMR-Intent"
+
+# Prefer the local model during development. If the local folder is not
+# present (for example on Render), Transformers will download/load the
+# model directly from the public Hugging Face repository.
+if LOCAL_INTENT_MODEL_DIR.exists():
+    INTENT_MODEL_SOURCE = str(LOCAL_INTENT_MODEL_DIR)
+    print(f"Intent model source: LOCAL -> {INTENT_MODEL_SOURCE}")
+else:
+    INTENT_MODEL_SOURCE = HF_INTENT_REPO
+    print(f"Intent model source: HUGGING FACE -> {INTENT_MODEL_SOURCE}")
 
 EMOTION_MODEL_DIR = (
     PROJECT_ROOT
@@ -197,19 +210,18 @@ class HybridNLPService:
         print("Device:", DEVICE)
 
         # Intent — XLM-RoBERTa
-
         print("\nLoading Intent Model...")
 
         cls.intent_tokenizer = (
             AutoTokenizer.from_pretrained(
-                INTENT_MODEL_DIR
+                INTENT_MODEL_SOURCE
             )
         )
 
         cls.intent_model = (
             AutoModelForSequenceClassification
             .from_pretrained(
-                INTENT_MODEL_DIR
+                INTENT_MODEL_SOURCE
             )
         )
 

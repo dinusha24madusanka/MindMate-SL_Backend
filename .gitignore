@@ -20,3 +20,27 @@ Thumbs.db
 
 # Large ML model files
 *.safetensors
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtual environments
+.venv/
+.venv312/
+venv/
+
+# IDE
+.idea/
+.junie/
+
+# Local secrets
+.env
+
+# Large local XLM-R backup
+models/intent/
+models/intent_local_backup/
+
+# Hugging Face cache
+.cache/

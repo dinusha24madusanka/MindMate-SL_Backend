@@ -18,7 +18,7 @@ app = FastAPI(
 
     description=(
         "Hybrid NLP backend for MindMate-SL using "
-        "XLM-RoBERTa intent recognition, "
+        "XLM-RoBERTa intent_local_backup recognition, "
         "CNN-LSTM emotion classification, "
         "and stress classification."
     ),
