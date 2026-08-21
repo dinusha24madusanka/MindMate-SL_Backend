@@ -4,6 +4,8 @@
     <content url="file://$MODULE_DIR$">
       <excludeFolder url="file://$MODULE_DIR$/.venv" />
       <excludeFolder url="file://$MODULE_DIR$/.venv312" />
+      <excludeFolder url="file://$MODULE_DIR$/.junie" />
+      <excludeFolder url="file://$MODULE_DIR$/models/intent_local_backup" />
     </content>
     <orderEntry type="jdk" jdkName="~\OneDrive\Desktop\GitHub Clone\MindMate-SL_Backend\.venv312" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />

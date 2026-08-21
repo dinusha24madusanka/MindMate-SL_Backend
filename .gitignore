@@ -43,4 +43,4 @@ models/intent/
 models/intent_local_backup/
 
 # Hugging Face cache
-.cache/
+.cache/.\.venv312\Scripts\Activate.ps1
