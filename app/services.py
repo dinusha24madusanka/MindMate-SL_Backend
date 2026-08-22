@@ -1,9 +1,7 @@
 from pathlib import Path
 import json
 
-import intent
 import joblib
-import stress
 
 import torch
 import torch.nn as nn
@@ -13,8 +11,9 @@ from transformers import (
     AutoModelForSequenceClassification
 )
 
-# PROJECT PATHS
+from app.reply_generator import DynamicReplyGenerator
 
+# PROJECT PATHS
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 LOCAL_INTENT_MODEL_DIR = (
@@ -353,10 +352,10 @@ class HybridNLPService:
                     "allow_gamification": False,
                     "matched_term": term
                 }
+
         return {
-            "risk_level": "NONE",
-            "allow_gamification": True,
-            "matched_term": None
+            "risk_level": "LOW",
+            "allow_gamification": True
         }
 
     # INTENT
@@ -545,49 +544,22 @@ class HybridNLPService:
         )
 
 
-        classifier = (
-            cls.stress_model
-            .named_steps["classifier"]
-        )
-
-
-        classes = list(
-            classifier.classes_
-        )
-
-
+        classifier = (cls.stress_model.named_steps["classifier"])
+        classes = list(classifier.classes_)
         if 1 in classes:
-
-            stress_index = (
-                classes.index(1)
-            )
-
+            stress_index = (classes.index(1))
             stress_probability = float(
-                probabilities[
-                    stress_index
-                ]
+                probabilities[stress_index]
             )
-
         else:
-
             stress_probability = 0.0
-
 
         # IMPORTANT:
         # This is model probability,
         # NOT a clinical stress severity score.
-        stress_score = round(
-            stress_probability
-            * 100
-        )
-        stress_score = round(
-            stress_probability * 100
-        )
+        stress_score = round(stress_probability * 100)
 
-        # ==================================
         # Keyword assisted stress boost
-        # ==================================
-
         stress_keywords = [
             "stress",
             "stressed",
@@ -600,63 +572,48 @@ class HybridNLPService:
             "godak stress",
             "tension"
         ]
-
         normalized = text.lower()
-
         if any(
                 word in normalized
                 for word in stress_keywords
         ):
-
             if stress_score < 60:
                 stress_score = 65
-
-
         return {
             "label_id": prediction,
-
             "label":
                 (
                     "stress"
                     if prediction == 1
                     else "non_stress"
                 ),
-
             "probability":
                 stress_probability,
-
             "score":
                 stress_score
         }
 
     # STRESS LEVEL
-
     @staticmethod
     def stress_level(score: int):
-
         if score >= 75:
             return "HIGH"
-
         if score >= 50:
             return "MODERATE"
-
         return "LOW"
 
     # ACTIVITY SELECTION
-
     @staticmethod
     def choose_activity(
             risk_level: str,
             stress_level: str,
             emotion: str
     ):
-
         if risk_level == "HIGH":
             return "SAFETY_SUPPORT"
 
         # HIGH STRESS
         if stress_level == "HIGH":
-
             if emotion in {
                 "fear",
                 "anxiety",
@@ -664,27 +621,22 @@ class HybridNLPService:
                 "anger"
             }:
                 return "BREATHING"
-
             return "GROUNDING"
 
         # MODERATE STRESS
         if stress_level == "MODERATE":
-
             if emotion in {
                 "fear",
                 "anxiety",
                 "sadness"
             }:
                 return "MANDALA"
-
             return "CALM_BUBBLES"
-
         return "NONE"
 
     # REPLY LANGUAGE DETECTION
     @staticmethod
     def detect_reply_language(text: str):
-
         text = str(text).strip()
         # Sinhala Unicode
         if any(
@@ -695,7 +647,6 @@ class HybridNLPService:
 
         # Romanized Sinhala / Singlish
         normalized = text.lower()
-
         singlish_markers = [
             "mata",
             "mama",
@@ -720,23 +671,19 @@ class HybridNLPService:
             "hari",
             "tikak"
         ]
-
         marker_count = sum(
             1
             for marker in singlish_markers
             if marker in normalized.split()
         )
-
         if marker_count >= 2:
             return "SINGLISH"
-
         # Default
         return "ENGLISH"
 
     # ACTIVITY DISPLAY NAME
     @staticmethod
     def activity_display_name(activity: str):
-
         names = {
             "GROUNDING": "5-4-3-2-1 Grounding",
             "BREATHING": "4-7-8 Breathing",
@@ -745,7 +692,6 @@ class HybridNLPService:
             "NONE": "",
             "SAFETY_SUPPORT": ""
         }
-
         return names.get(
             activity,
             activity.replace("_", " ").title()
@@ -762,15 +708,10 @@ class HybridNLPService:
             emotion: str,
             activity: str
     ):
-
         language = cls.detect_reply_language(text)
-
         activity_name = cls.activity_display_name(activity)
 
-        # ================================
         # SAFETY
-        # ================================
-
         if risk_level == "HIGH":
             return (
                 "Oya kiyapu de serious. "
@@ -782,12 +723,8 @@ class HybridNLPService:
                 "karanne naha."
             )
 
-        # ================================
         # HIGH STRESS
-        # ================================
-
         if stress_level == "HIGH":
-
             if language == "SINHALA":
                 return (
                     "ඔයාගේ message එකෙන් දැන් පීඩනය වැඩි "
@@ -797,7 +734,6 @@ class HybridNLPService:
                     "ඊට පස්සේ ඔයාට තියෙන ප්‍රශ්නය ගැන "
                     "අපි කතා කරමු."
                 )
-
             return (
                 "Oyage message eken pressure eka wadi "
                 "wage mata theruna. "
@@ -807,10 +743,7 @@ class HybridNLPService:
                 "katha karamu."
             )
 
-        # ================================
         # MODERATE STRESS
-        # ================================
-
         if stress_level == "MODERATE":
 
             if intent in {
@@ -835,10 +768,7 @@ class HybridNLPService:
                 "ekak karala podi break ekak ganna puluwan."
             )
 
-        # ================================
         # LOW / NORMAL CHAT
-        # ================================
-
         if intent in {
             "EXAM_STRESS",
             "EXAM"
@@ -876,26 +806,16 @@ class HybridNLPService:
     # FINAL HYBRID ANALYSIS
     @classmethod
     def analyze(cls, text: str):
+
         text = str(text).strip()
 
-        stress = cls.predict_stress(text)
-
-        emotion = cls.predict_emotion(text)
-
-        activity = cls.choose_activity(
-            risk_level,
-            stress["level"],
-            emotion["label"]
-        )
         if not text:
-            raise ValueError(
-                "Message cannot be empty."
-            )
-        # Safety gate MUST run first
-        safety = cls.detect_safety_risk(
-            text
-        )
-        # HIGH-RISK FLOW
+            raise ValueError("Message cannot be empty.")
+
+        # SAFETY CHECK FIRST
+        safety = cls.detect_safety_risk(text)
+
+        # HIGH RISK SAFETY FLOW
         if safety["risk_level"] == "HIGH":
             reply = cls.generate_reply(
                 text=text,
@@ -905,132 +825,114 @@ class HybridNLPService:
                 emotion="NOT_EVALUATED",
                 activity="SAFETY_SUPPORT"
             )
-
-            print("======================")
-            print("DEBUG TEXT:", text)
-            print("DEBUG INTENT:", intent)
-            print("DEBUG EMOTION:", emotion)
-            print("DEBUG STRESS:", stress)
-            print("DEBUG RISK:", risk_level)
-            print("DEBUG ACTIVITY:", activity)
-            print("======================")
-
             return {
                 "reply": reply,
-
                 "intent": "SKIPPED",
-
+                "intent_raw": None,
                 "intent_confidence": 0.0,
-
                 "emotion": "SKIPPED",
-
                 "emotion_confidence": 0.0,
-
                 "stress_score": 0,
-
                 "stress_probability": 0.0,
-
-                "stress_level":
-                    "NOT_EVALUATED",
-
+                "stress_level": "NOT_EVALUATED",
                 "risk_level": "HIGH",
-
                 "allow_gamification": False,
-
-                "recommended_activity":
-                    "SAFETY_SUPPORT"
+                "recommended_activity": "SAFETY_SUPPORT"
             }
-
         # NORMAL NLP FLOW
-        intent = cls.predict_intent(
-            text
-        )
+        intent = cls.predict_intent(text)
+        emotion = cls.predict_emotion(text)
+        stress = cls.predict_stress(text)
 
+        # STRESS BASED RISK
+        risk_level = safety["risk_level"]
+        allow_gamification = safety["allow_gamification"]
+        stress_level = cls.stress_level(stress["score"])
 
-        emotion = cls.predict_emotion(
-            text
-        )
+        # GAMIFICATION DECISION
+        allow_gamification = True
+        if risk_level == "HIGH":
+            allow_gamification = False
 
-
-        stress = cls.predict_stress(
-            text
-        )
-
-
-        stress_level = cls.stress_level(
-            stress["score"]
-        )
-
-
+        # ACTIVITY SELECTION
         activity = cls.choose_activity(
-
-            risk_level=
-                safety["risk_level"],
-
-            stress_level=
-                stress_level,
-
-            emotion=
-                emotion["label"]
-        )
-
-        reply = cls.generate_reply(
-            text=text,
-            intent=intent["label"],
-            risk_level=safety["risk_level"],
+            risk_level=risk_level,
             stress_level=stress_level,
-            emotion=emotion["label"],
-            activity=activity
+            emotion=emotion["label"]
         )
 
+        # AI RESPONSE
+        language = cls.detect_reply_language(text)
+        try:
+            reply = DynamicReplyGenerator.generate(
+                text=text,
+                language=language,
+                intent=intent["label"],
+                intent_raw=intent["raw_label"],
+                intent_confidence= intent["confidence"],
+                emotion= emotion["label"],
+                emotion_confidence= emotion["confidence"],
+                stress_score= stress["score"],
+                stress_level= stress_level,
+                recommended_activity= activity
+            )
+        except Exception as error:
+            print(
+                "Dynamic Reply Generator Error:",
+                repr(error)
+            )
+
+            # Technical fallback only.
+            # This is NOT the primary reply system.
+            reply = cls.generate_reply(
+                text=text,
+                intent=intent["label"],
+                risk_level=risk_level,
+                stress_level=stress_level,
+                emotion=emotion["label"],
+                activity=activity
+            )
+        print("==============================")
+        print("TEXT:", text)
+        print("INTENT:", intent["label"])
+        print("EMOTION:", emotion["label"])
+        print("STRESS:", stress["score"])
+        print("STRESS LEVEL:", stress_level)
+        print("RISK:", risk_level)
+        print("ACTIVITY:", activity)
+        print("==============================")
 
         return {
             "reply": reply,
-            "intent":
-                intent["label"],
-            "intent_raw":
-                intent["raw_label"],
-            "intent_confidence":
-                round(
-                    intent["confidence"],
+            "intent": intent["label"],
+            "intent_raw": intent["raw_label"],
+            "intent_confidence": round(intent["confidence"],
                     4),
             "emotion": emotion["label"],
-
-            "emotion_confidence":round(
-                    emotion["confidence"],
+            "emotion_confidence": round(emotion["confidence"],
                     4),
             "stress_score": stress["score"],
-
-            "stress_probability": round(stress["probability"],
+            "stress_probability":
+                round(stress["probability"],
                     4),
-
-            "stress_level":
-                stress_level,
-            "risk_level":
-                safety["risk_level"],
-            "allow_gamification":
-                safety[
-                    "allow_gamification"
-                ],
-            "recommended_activity":
-                activity
+            "stress_level": stress_level,
+            "risk_level": risk_level,
+            "allow_gamification": allow_gamification,
+            "recommended_activity": activity
         }
 
 # BACKWARD COMPATIBILITY
 # Keeps current main.py working until next step
 class NLPService:
-
     @staticmethod
     def analyze_stress_level(
         text: str
     ) -> tuple[str, int]:
-
         result = (
             HybridNLPService.analyze(
                 text
             )
         )
-
         return (
             result["reply"],
             result["stress_score"]
