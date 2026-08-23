@@ -1,21 +1,16 @@
 from pathlib import Path
 import json
-
 import joblib
-
 import torch
 import torch.nn as nn
-
 from transformers import (
     AutoTokenizer,
     AutoModelForSequenceClassification
 )
-
 from app.reply_generator import DynamicReplyGenerator
 
 # PROJECT PATHS
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-
 LOCAL_INTENT_MODEL_DIR = (
     PROJECT_ROOT
     / "models"
@@ -35,6 +30,7 @@ else:
     INTENT_MODEL_SOURCE = HF_INTENT_REPO
     print(f"Intent model source: HUGGING FACE -> {INTENT_MODEL_SOURCE}")
 
+
 EMOTION_MODEL_DIR = (
     PROJECT_ROOT
     / "models"
@@ -49,45 +45,25 @@ STRESS_MODEL_FILE = (
 )
 
 # DEVICE
-
-DEVICE = torch.device(
-    "cuda"
+DEVICE = torch.device("cuda"
     if torch.cuda.is_available()
     else "cpu"
 )
 
 # SAFETY TERMS
 # Prototype safety gate
-
 HIGH_RISK_TERMS = [
     # English
-    "kill myself",
-    "suicide",
-    "end my life",
-    "want to die",
-    "hurt myself",
-    "self harm",
-
+    "kill myself","suicide","end my life","want to die","hurt myself","self harm",
     # Romanized Sinhala / Singlish
-    "marenn ona",
-    "marenda hithenawa",
-    "marenna hithenawa",
-    "mata marenna ona",
-    "jeewithe epa",
-    "jeewithe iwara karanna",
-
+    "marenn ona","marenda hithenawa","marenna hithenawa","mata marenna ona","jeewithe epa","jeewithe iwara karanna",
     # Sinhala
-    "මැරෙන්න ඕන",
-    "මැරෙන්න හිතෙනවා",
-    "ජීවිතේ එපා"
+    "මැරෙන්න ඕන","මැරෙන්න හිතෙනවා","ජීවිතේ එපා"
 ]
-
 
 # CNN-LSTM ARCHITECTURE
 # Must match training architecture exactly
-
 class CNNLSTMClassifier(nn.Module):
-
     def __init__(
         self,
         vocab_size: int,
@@ -97,7 +73,6 @@ class CNNLSTMClassifier(nn.Module):
         num_classes: int
     ):
         super().__init__()
-
         self.embedding = nn.Embedding(
             vocab_size,
             embedding_dim,
@@ -112,7 +87,6 @@ class CNNLSTMClassifier(nn.Module):
         )
 
         self.relu = nn.ReLU()
-
         self.pool = nn.MaxPool1d(
             kernel_size=2
         )
@@ -134,7 +108,6 @@ class CNNLSTMClassifier(nn.Module):
 
 
     def forward(self, input_ids):
-
         x = self.embedding(
             input_ids
         )
@@ -179,41 +152,32 @@ class CNNLSTMClassifier(nn.Module):
         )
 
 # HYBRID NLP SERVICE
-
 class HybridNLPService:
-
     _loaded = False
-
+    EMOTION_RELIABILITY_THRESHOLD = 0.65
     intent_tokenizer = None
     intent_model = None
     intent_id2label = None
-
     emotion_model = None
     emotion_word2idx = None
     emotion_id2label = None
     emotion_max_length = None
     pad_index = None
     unk_index = None
-
     stress_model = None
 
     # LOAD ALL MODELS ONCE
-
     @classmethod
     def load_models(cls):
-
         if cls._loaded:
             return
-
         print("=" * 60)
         print("Loading MindMate-SL Hybrid NLP Models")
         print("=" * 60)
-
         print("Device:", DEVICE)
 
         # Intent — XLM-RoBERTa
         print("\nLoading Intent Model...")
-
         cls.intent_tokenizer = (
             AutoTokenizer.from_pretrained(
                 INTENT_MODEL_SOURCE
@@ -232,7 +196,6 @@ class HybridNLPService:
         )
 
         cls.intent_model.eval()
-
         cls.intent_id2label = {
             int(key): value
             for key, value
@@ -242,29 +205,23 @@ class HybridNLPService:
         print("Intent model loaded")
 
         # Emotion — CNN-LSTM
-
         print("Loading Emotion Model...")
-
         with open(
             EMOTION_MODEL_DIR / "config.json",
             "r",
             encoding="utf-8"
         ) as file:
-
             emotion_config = json.load(
                 file
             )
-
         with open(
             EMOTION_MODEL_DIR / "vocab.json",
             "r",
             encoding="utf-8"
         ) as file:
-
             cls.emotion_word2idx = json.load(
                 file
             )
-
         cls.emotion_id2label = {
             int(key): value
             for key, value
@@ -335,7 +292,6 @@ class HybridNLPService:
         print("=" * 60)
 
     # SAFETY GATE
-
     @staticmethod
     def detect_safety_risk(text: str):
 
@@ -354,8 +310,9 @@ class HybridNLPService:
                 }
 
         return {
-            "risk_level": "LOW",
-            "allow_gamification": True
+            "risk_level": "NONE",
+            "allow_gamification": True,
+            "matched_term": None
         }
 
     # INTENT
@@ -555,42 +512,116 @@ class HybridNLPService:
             stress_probability = 0.0
 
         # IMPORTANT:
-        # This is model probability,
-        # NOT a clinical stress severity score.
-        stress_score = round(stress_probability * 100)
+        # probability = raw stress-model probability
+        # score = support-routing score used by MindMate
+        # Neither value is a clinical assessment.
+        model_probability = float(
+            stress_probability
+        )
+        model_score = round(
+            model_probability * 100
+        )
+        # Start with raw model score
+        routing_score = model_score
 
-        # Keyword assisted stress boost
-        stress_keywords = [
+        # CONSERVATIVE KEYWORD ASSISTANCE
+        normalized = " ".join(
+            str(text)
+            .lower()
+            .split()
+        )
+
+        strong_stress_phrases = [
+            # Singlish
+            "godak stress",
+            "loku stress",
+            "hari stress",
+            "stress godak",
+            "godak pressure",
+            "loku pressure",
+            "baya hithenawa",
+            "loku bayak",
+            "hari bayai",
+
+            # English
+            "very stressed",
+            "extremely stressed",
+            "too much stress",
+            "a lot of pressure",
+            "really overwhelmed",
+
+            # Sinhala
+            "ගොඩක් ආතතිය",
+            "ලොකු පීඩනය",
+            "ගොඩක් බය",
+        ]
+
+        stress_terms = [
+            # English
             "stress",
             "stressed",
             "pressure",
+            "tension",
+            "overwhelmed",
+
+            # Singlish
             "baya",
             "bayai",
-            "hithenawa",
-            "amarui",
             "dukai",
-            "godak stress",
-            "tension"
+            "amarui",
+
+            # Sinhala
+            "ආතතිය",
+            "පීඩනය",
+            "බය",
+            "දුකයි",
         ]
-        normalized = text.lower()
+
+        # Strong explicit stress wording
         if any(
-                word in normalized
-                for word in stress_keywords
+                phrase in normalized
+                for phrase in strong_stress_phrases
         ):
-            if stress_score < 60:
-                stress_score = 65
+            routing_score = max(
+                routing_score,
+                65
+            )
+
+        # General explicit stress wording
+        elif any(
+                term in normalized
+                for term in stress_terms
+        ):
+            routing_score = max(
+                routing_score,
+                50
+            )
+
+        routing_score = max(
+            0,
+            min(
+                routing_score,
+                100
+            )
+        )
+
         return {
             "label_id": prediction,
+
             "label":
                 (
                     "stress"
                     if prediction == 1
                     else "non_stress"
                 ),
+
+            # Raw classifier output
             "probability":
-                stress_probability,
+                model_probability,
+
+            # Score used for support/activity routing
             "score":
-                stress_score
+                routing_score
         }
 
     # STRESS LEVEL
@@ -601,6 +632,92 @@ class HybridNLPService:
         if score >= 50:
             return "MODERATE"
         return "LOW"
+
+    # POSITIVE MESSAGE GUARD
+    @staticmethod
+    def is_positive_message_without_distress(
+        text: str
+    ) -> bool:
+        normalized = " ".join(
+            str(text)
+            .lower()
+            .split()
+        )
+        positive_phrases = [
+            # Singlish
+            "mata sathutui",
+            "godak sathutui",
+            "hondatama giya",
+            "hondin giya",
+            "exam eka pass una",
+            "pass una",
+            "assignment eka submit kala",
+            "submit kala",
+            "complete kala",
+            "iwara kala",
+            "weda tika iwara una",
+
+            # English
+            "i am happy",
+            "i'm happy",
+            "went well",
+            "it went well",
+            "i passed",
+            "passed my exam",
+            "i finished",
+            "i completed",
+            "i submitted",
+            "good news",
+            "great day",
+
+            # Sinhala
+            "මට සතුටුයි",
+            "ගොඩක් සතුටුයි",
+            "හොඳට ගියා",
+            "පාස් වුණා",
+            "ඉවර කළා",
+            "සම්පූර්ණ කළා",
+        ]
+        distress_terms = [
+            # English
+            "stress",
+            "stressed",
+            "pressure",
+            "tension",
+            "overwhelmed",
+            "worried",
+            "worry",
+            "anxious",
+            "afraid",
+
+            # Singlish
+            "baya",
+            "bayai",
+            "dukai",
+            "amarui",
+            "epa wela",
+            "awul",
+            "pressure eka",
+
+            # Sinhala
+            "ආතතිය",
+            "පීඩනය",
+            "බය",
+            "දුකයි",
+            "අමාරුයි",
+        ]
+        has_positive_context = any(
+            phrase in normalized
+            for phrase in positive_phrases
+        )
+        has_explicit_distress = any(
+            term in normalized
+            for term in distress_terms
+        )
+        return (
+            has_positive_context
+            and not has_explicit_distress
+        )
 
     # ACTIVITY SELECTION
     @staticmethod
@@ -711,101 +828,210 @@ class HybridNLPService:
         language = cls.detect_reply_language(text)
         activity_name = cls.activity_display_name(activity)
 
-        # SAFETY
+        # HIGH-RISK SAFETY RESPONSE
+        # Deterministic: Gemini is NOT used here.
         if risk_level == "HIGH":
+
+            # Sinhala Unicode
+            if language == "SINHALA":
+                return (
+                    "ඔයා කියපු දේ බරපතළයි. "
+                    "පුළුවන් නම් මේ වෙලාවේ තනියම ඉන්න එපා. "
+                    "ඔයා විශ්වාස කරන කෙනෙක් එක්ක ඉන්න හෝ "
+                    "ඉක්මනින් සහාය ඉල්ලන්න. "
+                    "සුදුසු මානසික සෞඛ්‍ය වෘත්තිකයෙකුගෙන් "
+                    "වෘත්තීය සහාය ලබාගැනීමත් වැදගත්. "
+                    "මේ අවස්ථාවේ MindMate ක්‍රීඩා හෝ "
+                    "වෙනත් gamified activities යෝජනා කරන්නේ නැහැ."
+                )
+
+            # Romanized Sinhala / Singlish
+            if language == "SINGLISH":
+                return (
+                    "Oya kiyapu de serious. "
+                    "Puluwan nam me welawe thaniyama inna epa. "
+                    "Oya trust karana kenek ekka inna hari "
+                    "ikmanin support illanna. "
+                    "Qualified mental health professional kenekgen "
+                    "professional support ganna puluwan nam eka wedagath. "
+                    "Me situation eke MindMate games saha "
+                    "gamified activities suggest karanne naha."
+                )
+
+            # English
             return (
-                "Oya kiyapu de serious. "
-                "Puluwan nam dan thaniyama inna epa. "
-                "Oya trust karana kenek ekka inna. "
-                "Professional support ekak ganna puluwan nam "
-                "eka karanna. "
-                "Me situation eke MindMate games suggest "
-                "karanne naha."
+                "What you shared sounds serious. "
+                "If possible, please do not stay alone right now. "
+                "Stay with someone you trust or reach out for support as soon as you can. "
+                "Seeking support from a qualified mental health professional is also important. "
+                "MindMate will not suggest games or gamified activities in this situation."
             )
 
         # HIGH STRESS
-        if stress_level == "HIGH":
+        # TECHNICAL FALLBACK RESPONSE
+        # Used only when Gemini generation fails.
+        positive_context = (
+            cls.is_positive_message_without_distress(
+                text
+            )
+        )
+
+        # POSITIVE / ACHIEVEMENT MESSAGE
+        if positive_context:
             if language == "SINHALA":
                 return (
-                    "ඔයාගේ message එකෙන් දැන් පීඩනය වැඩි "
-                    "වගේ මට තේරෙනවා. "
-                    f"පොඩි වෙලාවක් අරගෙන {activity_name} "
-                    "කරලා මනස ටිකක් සන්සුන් කරගන්න පුළුවන්. "
-                    "ඊට පස්සේ ඔයාට තියෙන ප්‍රශ්නය ගැන "
-                    "අපි කතා කරමු."
+                    "ඒක අහන්න ලැබීම සතුටක්. "
+                    "ඔයාට හොඳින් ගිය දෙයක් ගැන "
+                    "කතා කරන්න කැමති නම් මට කියන්න."
                 )
-            return (
-                "Oyage message eken pressure eka wadi "
-                "wage mata theruna. "
-                f"Podiyak calm wenna {activity_name} "
-                "try karanna puluwan. "
-                "Passe api oyata thiyena de gena "
-                "katha karamu."
-            )
-
-        # MODERATE STRESS
-        if stress_level == "MODERATE":
-
-            if intent in {
-                "EXAM_STRESS",
-                "EXAM",
-                "STUDY_STRESS"
-            }:
+            if language == "SINGLISH":
                 return (
-                    "Exam eka nisa oyata baya saha "
-                    "pressure eka enawa wage mata theruna. "
-                    "Eka normal deyak. "
-                    "Podi break ekak aran calm wenna. "
-                    "Oyata wada bayak enne mona part "
-                    "ekatada kiyanna. "
-                    "Api eka step by step balamu."
+                    "Eka ahanna labuna eka sathutui. "
+                    "Oyāta hondin giya de gena thawath "
+                    "katha karanna kemathi nam mata kiyanna."
+                )
+            return (
+                "I'm glad to hear that. "
+                "If you'd like, you can tell me more "
+                "about what went well."
+            )
+
+        # HIGH SUPPORT-ROUTING STRESS
+        if stress_level == "HIGH":
+            if activity != "NONE":
+                if language == "SINHALA":
+                    return (
+                        "ඔයාගේ message එකෙන් මේ වෙලාවේ "
+                        "පීඩනය වැඩි වගේ පේනවා. "
+                        f"ඔයා කැමති නම් {activity_name} "
+                        "වගේ කෙටි supportive activity එකක් "
+                        "කරලා පොඩි විවේකයක් ගන්න පුළුවන්. "
+                        "ඊට පස්සේ ඔයාට තියෙන දේ ගැන "
+                        "අපි කතා කරමු."
+                    )
+
+                if language == "SINGLISH":
+                    return (
+                        "Oyage message eken me welawe "
+                        "pressure eka wadi wage penenawa. "
+                        f"Oya kemathi nam {activity_name} "
+                        "wage podi supportive activity ekak "
+                        "karala short break ekak ganna puluwan. "
+                        "Passe oyata thiyena de gena "
+                        "api katha karamu."
+                    )
+
+                return (
+                    "Your message suggests that you may be "
+                    "under a lot of pressure right now. "
+                    f"If you'd like, you can try {activity_name} "
+                    "as a short supportive break. "
+                    "After that, we can continue talking "
+                    "about what's going on."
+                )
+
+            # HIGH stress but activity intentionally suppressed
+            if language == "SINHALA":
+                return (
+                    "ඔයාගේ message එකෙන් මේ වෙලාවේ "
+                    "පීඩනය වැඩි වගේ පේනවා. "
+                    "ඔයාට තියෙන දේ ගැන ටිකක් කියන්න "
+                    "කැමති නම් මම අහගෙන ඉන්නවා."
+                )
+            if language == "SINGLISH":
+                return (
+                    "Oyage message eken me welawe "
+                    "pressure eka wadi wage penenawa. "
+                    "Oyata thiyena de gena tikak kiyanna "
+                    "kemathi nam mama ahagena innawa."
+                )
+            return (
+                "Your message suggests that you may be "
+                "under a lot of pressure right now. "
+                "If you'd like, you can tell me more "
+                "about what's going on."
+            )
+
+        # MODERATE SUPPORT-ROUTING STRESS
+        if stress_level == "MODERATE":
+            if activity != "NONE":
+                if language == "SINHALA":
+                    return (
+                        "ඔයාගේ message එකෙන් ටිකක් පීඩනය "
+                        "තියෙන වගේ පේනවා. "
+                        f"ඔයා කැමති නම් {activity_name} "
+                        "වගේ කෙටි supportive break එකක් "
+                        "ගන්න පුළුවන්. "
+                        "ඊට පස්සේ මේ ගැන අපි කතා කරමු."
+                    )
+
+                if language == "SINGLISH":
+                    return (
+                        "Oyage message eken tikak pressure "
+                        "thiyena wage penenawa. "
+                        f"Oya kemathi nam {activity_name} "
+                        "wage podi supportive break ekak "
+                        "ganna puluwan. "
+                        "Passe me gena api katha karamu."
+                    )
+
+                return (
+                    "Your message suggests that you may be "
+                    "feeling some pressure. "
+                    f"If you'd like, you can try {activity_name} "
+                    "as a short supportive break. "
+                    "Then we can continue talking about it."
+                )
+
+            if language == "SINHALA":
+                return (
+                    "ඔයාගේ message එකෙන් ටිකක් පීඩනය "
+                    "තියෙන වගේ පේනවා. "
+                    "මේකට ප්‍රධාන හේතුව මොකක්ද කියලා "
+                    "කතා කරන්න කැමති නම් මට කියන්න."
+                )
+
+            if language == "SINGLISH":
+                return (
+                    "Oyage message eken tikak pressure "
+                    "thiyena wage penenawa. "
+                    "Mekata main reason eka mokakda kiyala "
+                    "katha karanna kemathi nam mata kiyanna."
                 )
 
             return (
-                "Oyage message eken tikak pressure ekak "
-                "penenawa wage. "
-                f"Oya kemathi nam {activity_name} "
-                "ekak karala podi break ekak ganna puluwan."
+                "Your message suggests that you may be "
+                "feeling some pressure. "
+                "If you'd like, tell me a little more "
+                "about what's causing it."
             )
 
-        # LOW / NORMAL CHAT
-        if intent in {
-            "EXAM_STRESS",
-            "EXAM"
-        }:
+        # LOW / NORMAL MESSAGE
+        if language == "SINHALA":
             return (
-                "Exam eka gena oyata podi bayak "
-                "hithena eka mata theruna. "
-                "Oyata amaruma wenne mona kotasatada "
-                "kiyanna. "
-                "Api eka solve karamu."
+                "ඔයා කියපු දේ මට තේරුණා. "
+                "ඒ ගැන තව ටිකක් කතා කරන්න කැමති නම් "
+                "මට කියන්න."
             )
 
-        if intent in {
-            "SADNESS",
-            "LONELY"
-        }:
+        if language == "SINGLISH":
             return (
-                "Oyata tikak amarui wage mata theruna. "
-                "Ehema hithenna hethuwa mokakda "
-                "kiyala mata kiyanna puluwanda?"
-            )
-
-        if intent == "WORK_STRESS":
-            return (
-                "Weda walin pressure eka wadi wela wage. "
-                "Stress wenne mona deyak nisa da "
-                "api balamu."
+                "Oya kiyapu de mata theruna. "
+                "E gena thawath tikak katha karanna "
+                "kemathi nam mata kiyanna."
             )
 
         return (
-            "Oya kiyapu eka mata theruna. "
-            "E gena tikak kiyanna puluwanda?"
+            "I understand what you shared. "
+            "If you'd like, you can tell me a little more about it."
         )
 
     # FINAL HYBRID ANALYSIS
     @classmethod
     def analyze(cls, text: str):
+
+        if text is None:
+            raise ValueError("Message cannot be empty.")
 
         text = str(text).strip()
 
@@ -839,27 +1065,48 @@ class HybridNLPService:
                 "allow_gamification": False,
                 "recommended_activity": "SAFETY_SUPPORT"
             }
-        # NORMAL NLP FLOW
+
+        # Run the NLP models only after the safety gate.
         intent = cls.predict_intent(text)
         emotion = cls.predict_emotion(text)
         stress = cls.predict_stress(text)
 
-        # STRESS BASED RISK
+        # CONFIDENCE-AWARE EMOTION
+        if (
+                emotion["confidence"]
+                >= cls.EMOTION_RELIABILITY_THRESHOLD
+        ):
+            effective_emotion = emotion["label"]
+
+        else:
+            effective_emotion = "UNCERTAIN"
+
+        # SAFETY RISK AND STRESS LEVEL ARE SEPARATE
         risk_level = safety["risk_level"]
         allow_gamification = safety["allow_gamification"]
         stress_level = cls.stress_level(stress["score"])
 
-        # GAMIFICATION DECISION
-        allow_gamification = True
-        if risk_level == "HIGH":
-            allow_gamification = False
+        # ACTIVITY SELECTION
+        # POSITIVE MESSAGE GUARD
+        positive_context = (
+            cls.is_positive_message_without_distress(
+                text
+            )
+        )
+
 
         # ACTIVITY SELECTION
-        activity = cls.choose_activity(
-            risk_level=risk_level,
-            stress_level=stress_level,
-            emotion=emotion["label"]
-        )
+        if positive_context:
+            # Keep the original model outputs for
+            # research/debugging, but do not show
+            # an unnecessary wellbeing activity.
+            activity = "NONE"
+        else:
+            activity = cls.choose_activity(
+                risk_level=risk_level,
+                stress_level=stress_level,
+                emotion=effective_emotion
+            )
 
         # AI RESPONSE
         language = cls.detect_reply_language(text)
@@ -869,12 +1116,13 @@ class HybridNLPService:
                 language=language,
                 intent=intent["label"],
                 intent_raw=intent["raw_label"],
-                intent_confidence= intent["confidence"],
-                emotion= emotion["label"],
-                emotion_confidence= emotion["confidence"],
-                stress_score= stress["score"],
-                stress_level= stress_level,
-                recommended_activity= activity
+                intent_confidence=intent["confidence"],
+                emotion=effective_emotion,
+                emotion_confidence=emotion["confidence"],
+                stress_score=stress["score"],
+                stress_probability=stress["probability"],
+                stress_level=stress_level,
+                recommended_activity=activity
             )
         except Exception as error:
             print(
@@ -889,16 +1137,20 @@ class HybridNLPService:
                 intent=intent["label"],
                 risk_level=risk_level,
                 stress_level=stress_level,
-                emotion=emotion["label"],
+                emotion=effective_emotion,
                 activity=activity
             )
         print("==============================")
         print("TEXT:", text)
         print("INTENT:", intent["label"])
-        print("EMOTION:", emotion["label"])
-        print("STRESS:", stress["score"])
+        print("EMOTION RAW:",emotion["label"])
+        print("EMOTION CONFIDENCE:",round(emotion["confidence"],4))
+        print("EMOTION USED:",effective_emotion)
+        print("STRESS MODEL PROBABILITY:",round(stress["probability"],4))
+        print("STRESS ROUTING SCORE:",stress["score"])
         print("STRESS LEVEL:", stress_level)
         print("RISK:", risk_level)
+        print("POSITIVE CONTEXT:", positive_context)
         print("ACTIVITY:", activity)
         print("==============================")
 
@@ -908,12 +1160,11 @@ class HybridNLPService:
             "intent_raw": intent["raw_label"],
             "intent_confidence": round(intent["confidence"],
                     4),
-            "emotion": emotion["label"],
+            "emotion": effective_emotion,
             "emotion_confidence": round(emotion["confidence"],
                     4),
             "stress_score": stress["score"],
-            "stress_probability":
-                round(stress["probability"],
+            "stress_probability":round(stress["probability"],
                     4),
             "stress_level": stress_level,
             "risk_level": risk_level,

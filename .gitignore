@@ -1,14 +1,17 @@
-# Python Virtual Environments
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Python virtual environments
 .venv/
-.venv312/
+.venv*/
 venv/
 env/
 
 # Python cache
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
 
 # IDE
 .idea/
@@ -17,30 +20,3 @@ __pycache__/
 # OS
 .DS_Store
 Thumbs.db
-
-# Large ML model files
-*.safetensors
-
-# Python
-__pycache__/
-*.pyc
-*.pyo
-
-# Virtual environments
-.venv/
-.venv312/
-venv/
-
-# IDE
-.idea/
-.junie/
-
-# Local secrets
-.env
-
-# Large local XLM-R backup
-models/intent/
-models/intent_local_backup/
-
-# Hugging Face cache
-.cache/.\.venv312\Scripts\Activate.ps1

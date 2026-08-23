@@ -43,6 +43,7 @@ class DynamicReplyGenerator:
         emotion: str,
         emotion_confidence: float,
         stress_score: int,
+        stress_probability: float,
         stress_level: str,
         recommended_activity: str
     ) -> str:
@@ -64,8 +65,9 @@ NLP INFORMATION:
 - intent confidence: {intent_confidence:.4f}
 - emotion: {emotion}
 - emotion confidence: {emotion_confidence:.4f}
-- model stress probability score: {stress_score}/100
-- stress category: {stress_level}
+- raw stress-model probability: {stress_probability:.4f}
+- support-routing stress score: {stress_score}/100
+- support-routing stress category: {stress_level}
 - selected supportive activity: {recommended_activity}
 
 IMPORTANT RULES:
@@ -75,9 +77,23 @@ IMPORTANT RULES:
 2. Intent, emotion and stress values are model predictions.
 Do not present them as medical facts.
 
+The raw stress-model probability and the support-routing
+stress score are non-clinical outputs.
+
+The routing score may include conservative keyword assistance.
+Never describe either value as a diagnosis,
+clinical severity, or measured mental-health condition.
+
 3. If intent confidence is low or intent is UNCERTAIN,
 do not assume the raw intent is correct.
 Understand the user mainly from their actual message.
+
+If emotion is UNCERTAIN or emotion confidence is below 0.65,
+do not infer the user's emotional state from that model output.
+Use the actual USER MESSAGE as the primary evidence.
+
+Never tell the user that they are angry, sad, afraid, or joyful
+only because the emotion classifier predicted that label.
 
 4. Reply in the same language style as the user:
 - Sinhala Unicode -> Sinhala
