@@ -20,3 +20,9 @@ __pycache__/
 # OS
 .DS_Store
 Thumbs.db
+
+# Large ML model files
+*.safetensors
+
+# Local model backups
+models/intent_local_backup/
