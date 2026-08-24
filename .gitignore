@@ -7,11 +7,12 @@
 .venv/
 .venv*/
 venv/
+venv312/
 env/
 
 # Python cache
 __pycache__/
-*.py[cod]
+*.pyc
 
 # IDE
 .idea/
@@ -26,3 +27,10 @@ Thumbs.db
 
 # Local model backups
 models/intent_local_backup/
+
+
+
+
+
+
+

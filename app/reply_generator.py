@@ -1,14 +1,20 @@
 import os
+from pathlib import Path
 
+from dotenv import load_dotenv
 from google import genai
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+load_dotenv(
+    PROJECT_ROOT / ".env"
+)
 
 
 class DynamicReplyGenerator:
 
     _client = None
-
-    MODEL_NAME = "gemini-3.1-flash-lite"
-
 
     @classmethod
     def _get_client(cls):
@@ -30,7 +36,12 @@ class DynamicReplyGenerator:
 
         return cls._client
 
+    _client = None
+    # Gemini model
+    MODEL_NAME = "gemini-3.1-flash-lite"
 
+    # GET GEMINI CLIENT
+    # GENERATE DYNAMIC REPLY
     @classmethod
     def generate(
         cls,
@@ -143,21 +154,25 @@ Avoid long paragraphs.
 Return ONLY the reply that should be shown to the user.
 """
 
+        # GET CLIENT
         client = cls._get_client()
 
-        interaction = client.interactions.create(
-            model=cls.MODEL_NAME,
-            input=prompt
-        )
-
-        reply = (
-            interaction.output_text
-            or ""
-        ).strip()
-
-        if not reply:
-            raise RuntimeError(
-                "Dynamic reply generator returned an empty response."
+        # SEND REQUEST TO GEMINI
+        try:
+            interaction = client.interactions.create(
+                model=cls.MODEL_NAME,
+                input=prompt
             )
-
-        return reply
+            reply = (
+                interaction.output_text
+                or ""
+            ).strip()
+            if not reply:
+                raise RuntimeError(
+                    "Dynamic reply generator returned an empty response."
+                )
+            return reply
+        except Exception as e:
+            raise RuntimeError(
+                f"Gemini dynamic reply generation failed: {e}"
+            ) from e
