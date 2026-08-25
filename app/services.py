@@ -1,5 +1,8 @@
 from pathlib import Path
 import json
+import math
+import re
+import threading
 import joblib
 import torch
 import torch.nn as nn
@@ -154,6 +157,7 @@ class CNNLSTMClassifier(nn.Module):
 # HYBRID NLP SERVICE
 class HybridNLPService:
     _loaded = False
+    _load_lock = threading.Lock()
     EMOTION_RELIABILITY_THRESHOLD = 0.65
     intent_tokenizer = None
     intent_model = None
@@ -169,6 +173,15 @@ class HybridNLPService:
     # LOAD ALL MODELS ONCE
     @classmethod
     def load_models(cls):
+        if cls._loaded:
+            return
+
+        with cls._load_lock:
+            if not cls._loaded:
+                cls._load_models_unlocked()
+
+    @classmethod
+    def _load_models_unlocked(cls):
         if cls._loaded:
             return
         print("=" * 60)
@@ -481,35 +494,61 @@ class HybridNLPService:
         cls,
         text: str
     ):
+        if not isinstance(text, str):
+            raise TypeError("text must be a string")
+
+        normalized = " ".join(text.casefold().split())
+        if not normalized:
+            raise ValueError("text must not be empty")
 
         cls.load_models()
 
+        if cls.stress_model is None:
+            raise RuntimeError("stress model was not loaded")
+        if not hasattr(cls.stress_model, "predict_proba"):
+            raise TypeError("stress model must support predict_proba")
 
-        prediction = int(
-
-            cls.stress_model.predict(
-                [text]
-            )[0]
+        probabilities = list(
+            cls.stress_model.predict_proba([text])[0]
         )
-
-
-        probabilities = (
-            cls.stress_model
-            .predict_proba(
-                [text]
-            )[0]
+        classes = list(
+            getattr(cls.stress_model, "classes_", [])
         )
-
-
-        classifier = (cls.stress_model.named_steps["classifier"])
-        classes = list(classifier.classes_)
-        if 1 in classes:
-            stress_index = (classes.index(1))
-            stress_probability = float(
-                probabilities[stress_index]
+        if not classes:
+            named_steps = getattr(
+                cls.stress_model,
+                "named_steps",
+                {}
             )
-        else:
-            stress_probability = 0.0
+            classifier = named_steps.get("classifier")
+            classes = list(
+                getattr(classifier, "classes_", [])
+            )
+
+        if len(classes) != len(probabilities):
+            raise ValueError(
+                "stress model classes do not match its probabilities"
+            )
+        if set(classes) != {0, 1}:
+            raise ValueError(
+                "stress model must use binary classes 0 and 1"
+            )
+
+        probability_values = [float(value) for value in probabilities]
+        if any(
+            not math.isfinite(value) or not 0.0 <= value <= 1.0
+            for value in probability_values
+        ):
+            raise ValueError("stress model returned invalid probabilities")
+
+        stress_index = classes.index(1)
+        stress_probability = probability_values[stress_index]
+
+        prediction_index = max(
+            range(len(probabilities)),
+            key=probabilities.__getitem__
+        )
+        prediction = int(classes[prediction_index])
 
         # IMPORTANT:
         # probability = raw stress-model probability
@@ -518,30 +557,31 @@ class HybridNLPService:
         model_probability = float(
             stress_probability
         )
-        model_score = round(
-            model_probability * 100
-        )
+        model_score = int(model_probability * 100)
         # Start with raw model score
         routing_score = model_score
 
         # CONSERVATIVE KEYWORD ASSISTANCE
-        normalized = " ".join(
-            str(text)
-            .lower()
-            .split()
-        )
-
         strong_stress_phrases = [
+
             # Singlish
             "godak stress",
-            "loku stress",
+            "godakma stress",
+            "mara stress",
             "hari stress",
+            "loku stress",
             "stress godak",
+            "stress wadi",
+            "stress eka wadi",
             "godak pressure",
             "loku pressure",
+            "pressure eka wadi",
+            "pressure eka unbearable",
             "baya hithenawa",
             "loku bayak",
             "hari bayai",
+            "focus karaganna ba",
+            "kisima deyakata focus karaganna ba",
 
             # English
             "very stressed",
@@ -549,6 +589,9 @@ class HybridNLPService:
             "too much stress",
             "a lot of pressure",
             "really overwhelmed",
+            "completely overwhelmed",
+            "cannot focus",
+            "can't focus",
 
             # Sinhala
             "ගොඩක් ආතතිය",
@@ -563,33 +606,80 @@ class HybridNLPService:
             "pressure",
             "tension",
             "overwhelmed",
-
+            "worried",
+            "worry",
+            "anxious",
+            "afraid",
             # Singlish
-            "baya",
             "bayai",
-            "dukai",
+            "baya",
             "amarui",
-
+            "hitha kalabala",
             # Sinhala
             "ආතතිය",
             "පීඩනය",
             "බය",
-            "දුකයි",
+            "අමාරුයි",
         ]
+
+        negations = {
+            "not", "no", "never", "neither",
+            "don't", "dont", "isn't", "isnt",
+            "wasn't", "wasnt", "aren't", "arent",
+            "weren't", "werent", "naha", "na", "ne"
+        }
+        neutral_phrases = {
+            "blood pressure", "pressure cooker",
+            "stress ball", "stress free", "stress-free",
+            "stress management", "stress test", "stressed syllable"
+        }
+
+        def phrase_regex(phrase: str) -> re.Pattern[str]:
+            phrase_pattern = re.escape(
+                phrase.casefold()
+            ).replace(r"\ ", r"\s+")
+            return re.compile(
+                rf"(?<!\w){phrase_pattern}(?!\w)",
+                re.IGNORECASE
+            )
+
+        neutral_spans = [
+            match.span()
+            for neutral_phrase in neutral_phrases
+            for match in phrase_regex(neutral_phrase).finditer(normalized)
+        ]
+
+        def contains_unnegated(phrase: str) -> bool:
+            for match in phrase_regex(phrase).finditer(normalized):
+                # Treat forms such as "stress-free" as non-stress wording.
+                if normalized[match.end():].startswith("-free"):
+                    continue
+                if any(
+                    start <= match.start() and match.end() <= end
+                    for start, end in neutral_spans
+                ):
+                    continue
+
+                prefix_words = re.findall(
+                    r"[\w']+",
+                    normalized[:match.start()]
+                )[-3:]
+                if not any(word in negations for word in prefix_words):
+                    return True
+            return False
 
         # Strong explicit stress wording
         if any(
-                phrase in normalized
+                contains_unnegated(phrase)
                 for phrase in strong_stress_phrases
         ):
             routing_score = max(
                 routing_score,
-                65
+                75
             )
 
-        # General explicit stress wording
         elif any(
-                term in normalized
+                contains_unnegated(term)
                 for term in stress_terms
         ):
             routing_score = max(
@@ -720,35 +810,27 @@ class HybridNLPService:
         )
 
     # ACTIVITY SELECTION
-    @staticmethod
+    @classmethod
     def choose_activity(
+            cls,
             risk_level: str,
             stress_level: str,
             emotion: str
-    ):
+    ) -> str:
+
+        # Safety always has highest priority
         if risk_level == "HIGH":
             return "SAFETY_SUPPORT"
 
-        # HIGH STRESS
+        # High stress -> Mandala Paint Flow
         if stress_level == "HIGH":
-            if emotion in {
-                "fear",
-                "anxiety",
-                "sadness",
-                "anger"
-            }:
-                return "BREATHING"
-            return "GROUNDING"
+            return "MANDALA"
 
-        # MODERATE STRESS
+        # Moderate stress -> Calm Bubbles
         if stress_level == "MODERATE":
-            if emotion in {
-                "fear",
-                "anxiety",
-                "sadness"
-            }:
-                return "MANDALA"
             return "CALM_BUBBLES"
+
+        # Low stress -> no activity
         return "NONE"
 
     # REPLY LANGUAGE DETECTION
