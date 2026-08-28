@@ -687,8 +687,7 @@ class HybridNLPService:
                 50
             )
 
-        routing_score = max(
-            0,
+        routing_score = max(0,
             min(
                 routing_score,
                 100
@@ -1222,19 +1221,14 @@ class HybridNLPService:
                 emotion=effective_emotion,
                 activity=activity
             )
-        print("==============================")
-        print("TEXT:", text)
-        print("INTENT:", intent["label"])
-        print("EMOTION RAW:",emotion["label"])
-        print("EMOTION CONFIDENCE:",round(emotion["confidence"],4))
-        print("EMOTION USED:",effective_emotion)
-        print("STRESS MODEL PROBABILITY:",round(stress["probability"],4))
-        print("STRESS ROUTING SCORE:",stress["score"])
-        print("STRESS LEVEL:", stress_level)
-        print("RISK:", risk_level)
-        print("POSITIVE CONTEXT:", positive_context)
-        print("ACTIVITY:", activity)
-        print("==============================")
+        print(
+            "MindMate analysis completed:",
+            {
+                "stress_level": stress_level,
+                "risk_level": risk_level,
+                "activity": activity
+            }
+        )
 
         return {
             "reply": reply,
