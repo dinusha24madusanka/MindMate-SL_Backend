@@ -1,0 +1,11 @@
+MindMate-SL XLM-RoBERTa Evaluation
+==================================================
+Test Samples: 140
+Accuracy: 0.3357 (33.57%)
+Macro Precision: 0.4018
+Macro Recall: 0.3008
+Macro F1: 0.2788 (27.88%)
+Weighted F1: 0.3170
+Average Confidence: 0.1459
+UNCERTAIN Count: 132
+UNCERTAIN Rate: 94.29%

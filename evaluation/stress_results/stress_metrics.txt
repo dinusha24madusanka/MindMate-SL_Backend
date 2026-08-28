@@ -1,0 +1,8 @@
+MindMate-SL Stress Classifier Evaluation
+==================================================
+Test Samples: 712
+Accuracy: 0.7402 (74.02%)
+Macro Precision: 0.7402
+Macro Recall: 0.7394
+Macro F1: 0.7395
+Weighted F1: 0.7399
