@@ -4,36 +4,26 @@ from pathlib import Path
 from dotenv import load_dotenv
 from google import genai
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-
-load_dotenv(
-    PROJECT_ROOT / ".env"
-)
-
+load_dotenv(PROJECT_ROOT / ".env")
 
 class DynamicReplyGenerator:
-
     _client = None
 
     @classmethod
     def _get_client(cls):
 
         if cls._client is None:
-
             api_key = os.getenv(
                 "GEMINI_API_KEY"
             )
-
             if not api_key:
                 raise RuntimeError(
                     "GEMINI_API_KEY is not configured."
                 )
-
             cls._client = genai.Client(
                 api_key=api_key
             )
-
         return cls._client
 
     _client = None

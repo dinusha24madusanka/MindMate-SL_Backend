@@ -33,7 +33,6 @@ else:
     INTENT_MODEL_SOURCE = HF_INTENT_REPO
     print(f"Intent model source: HUGGING FACE -> {INTENT_MODEL_SOURCE}")
 
-
 EMOTION_MODEL_DIR = (
     PROJECT_ROOT
     / "models"
@@ -81,75 +80,41 @@ class CNNLSTMClassifier(nn.Module):
             embedding_dim,
             padding_idx=0
         )
-
         self.conv = nn.Conv1d(
             in_channels=embedding_dim,
             out_channels=cnn_channels,
             kernel_size=3,
             padding=1
         )
-
         self.relu = nn.ReLU()
         self.pool = nn.MaxPool1d(
             kernel_size=2
         )
-
         self.lstm = nn.LSTM(
             input_size=cnn_channels,
             hidden_size=lstm_hidden,
             batch_first=True
         )
-
         self.dropout = nn.Dropout(
             0.30
         )
-
         self.classifier = nn.Linear(
             lstm_hidden,
             num_classes
         )
 
-
     def forward(self, input_ids):
-        x = self.embedding(
-            input_ids
-        )
-
-        x = x.transpose(
-            1,
-            2
-        )
-
-        x = self.conv(
-            x
-        )
-
-        x = self.relu(
-            x
-        )
-
-        x = self.pool(
-            x
-        )
-
-        x = x.transpose(
-            1,
-            2
-        )
-
-        _, (
-            hidden,
-            _
-        ) = self.lstm(
-            x
-        )
-
+        x = self.embedding(input_ids)
+        x = x.transpose(1,2)
+        x = self.conv(x)
+        x = self.relu(x)
+        x = self.pool(x)
+        x = x.transpose(1,2)
+        _, (hidden,_) = self.lstm(x)
         x = hidden[-1]
-
         x = self.dropout(
             x
         )
-
         return self.classifier(
             x
         )
@@ -175,7 +140,6 @@ class HybridNLPService:
     def load_models(cls):
         if cls._loaded:
             return
-
         with cls._load_lock:
             if not cls._loaded:
                 cls._load_models_unlocked()
@@ -204,17 +168,13 @@ class HybridNLPService:
             )
         )
 
-        cls.intent_model.to(
-            DEVICE
-        )
-
+        cls.intent_model.to(DEVICE)
         cls.intent_model.eval()
         cls.intent_id2label = {
             int(key): value
             for key, value
             in cls.intent_model.config.id2label.items()
         }
-
         print("Intent model loaded")
 
         # Emotion — CNN-LSTM
@@ -240,80 +200,48 @@ class HybridNLPService:
             for key, value
             in emotion_config["id2label"].items()
         }
-
-        cls.emotion_max_length = (
-            emotion_config["max_length"]
-        )
-
-        cls.pad_index = (
-            cls.emotion_word2idx["<PAD>"]
-        )
-
-        cls.unk_index = (
-            cls.emotion_word2idx["<UNK>"]
-        )
-
+        cls.emotion_max_length = (emotion_config["max_length"])
+        cls.pad_index = (cls.emotion_word2idx["<PAD>"])
+        cls.unk_index = (cls.emotion_word2idx["<UNK>"])
         cls.emotion_model = CNNLSTMClassifier(
-
-            vocab_size=
-                emotion_config["vocab_size"],
-
-            embedding_dim=
-                emotion_config["embedding_dim"],
-
-            cnn_channels=
-                emotion_config["cnn_channels"],
-
-            lstm_hidden=
-                emotion_config["lstm_hidden"],
-
-            num_classes=
-                emotion_config["num_classes"]
+            vocab_size= emotion_config["vocab_size"],
+            embedding_dim= emotion_config["embedding_dim"],
+            cnn_channels= emotion_config["cnn_channels"],
+            lstm_hidden= emotion_config["lstm_hidden"],
+            num_classes= emotion_config["num_classes"]
         )
 
         cls.emotion_model.load_state_dict(
-
             torch.load(
                 EMOTION_MODEL_DIR
                 / "cnn_lstm_best.pt",
-
                 map_location=DEVICE
             )
         )
-
         cls.emotion_model.to(
             DEVICE
         )
-
         cls.emotion_model.eval()
-
         print("Emotion model loaded")
 
         # Stress Classifier
-
         print("Loading Stress Model...")
-
         cls.stress_model = joblib.load(
             STRESS_MODEL_FILE
         )
-
         print("Stress model loaded")
-
         cls._loaded = True
-
         print("\nHybrid NLP models ready")
         print("=" * 60)
 
     # SAFETY GATE
     @staticmethod
     def detect_safety_risk(text: str):
-
         normalized = (
             str(text)
             .lower()
             .strip()
         )
-
         for term in HIGH_RISK_TERMS:
             if term in normalized:
                 return {
@@ -329,7 +257,6 @@ class HybridNLPService:
         }
 
     # INTENT
-
     @classmethod
     def predict_intent(cls, text: str):
         cls.load_models()
@@ -340,39 +267,30 @@ class HybridNLPService:
             max_length=96
         )
 
-        inputs = {
-            key: value.to(
-                DEVICE
-            )
+        inputs = {key: value.to(DEVICE)
             for key, value
             in inputs.items()
         }
-
         with torch.no_grad():
             outputs = cls.intent_model(
                 **inputs
             )
-
             probabilities = torch.softmax(
                 outputs.logits,
                 dim=1
             )
-
             confidence, prediction = (
                 torch.max(
                     probabilities,
                     dim=1
                 )
             )
-
         intent_id = int(
             prediction.item()
         )
-
         confidence_value = float(
             confidence.item()
         )
-
         raw_label = (
             cls.intent_id2label[
                 intent_id
@@ -386,7 +304,6 @@ class HybridNLPService:
             if confidence_value >= 0.35
             else "UNCERTAIN"
         )
-
         return {
             "id": intent_id,
             "label": final_label,
@@ -395,19 +312,16 @@ class HybridNLPService:
         }
 
     # EMOTION TEXT ENCODING
-
     @classmethod
     def encode_emotion_text(
         cls,
         text: str
     ):
-
         tokens = (
             str(text)
             .lower()
             .split()
         )
-
         token_ids = [
             cls.emotion_word2idx.get(
                 token,
@@ -418,21 +332,14 @@ class HybridNLPService:
                 :cls.emotion_max_length
             ]
         ]
-
         if (
             len(token_ids)
             < cls.emotion_max_length
         ):
-            token_ids += [
-
-                cls.pad_index
-
-            ] * (
-
+            token_ids += [cls.pad_index] * (
                 cls.emotion_max_length
                 - len(token_ids)
             )
-
         return torch.tensor(
             [token_ids],
             dtype=torch.long
@@ -441,7 +348,6 @@ class HybridNLPService:
         )
 
     # EMOTION
-
     @classmethod
     def predict_emotion(
         cls,
@@ -467,28 +373,22 @@ class HybridNLPService:
                     dim=1
                 )
             )
-
-
         emotion_id = int(
             prediction.item()
         )
-
-
         return {
             "id": emotion_id,
-
             "label":
                 cls.emotion_id2label[
                     emotion_id
                 ],
-
             "confidence":
                 float(
                     confidence.item()
                 )
         }
-    # STRESS
 
+    # STRESS
     @classmethod
     def predict_stress(
         cls,
@@ -502,7 +402,6 @@ class HybridNLPService:
             raise ValueError("text must not be empty")
 
         cls.load_models()
-
         if cls.stress_model is None:
             raise RuntimeError("stress model was not loaded")
         if not hasattr(cls.stress_model, "predict_proba"):
@@ -521,18 +420,13 @@ class HybridNLPService:
                 {}
             )
             classifier = named_steps.get("classifier")
-            classes = list(
-                getattr(classifier, "classes_", [])
+            classes = list(getattr(classifier, "classes_", [])
             )
 
         if len(classes) != len(probabilities):
-            raise ValueError(
-                "stress model classes do not match its probabilities"
-            )
+            raise ValueError("stress model classes do not match its probabilities")
         if set(classes) != {0, 1}:
-            raise ValueError(
-                "stress model must use binary classes 0 and 1"
-            )
+            raise ValueError("stress model must use binary classes 0 and 1")
 
         probability_values = [float(value) for value in probabilities]
         if any(
@@ -540,17 +434,14 @@ class HybridNLPService:
             for value in probability_values
         ):
             raise ValueError("stress model returned invalid probabilities")
-
         stress_index = classes.index(1)
         stress_probability = probability_values[stress_index]
-
         prediction_index = max(
             range(len(probabilities)),
             key=probabilities.__getitem__
         )
         prediction = int(classes[prediction_index])
 
-        # IMPORTANT:
         # probability = raw stress-model probability
         # score = support-routing score used by MindMate
         # Neither value is a clinical assessment.
@@ -563,7 +454,6 @@ class HybridNLPService:
 
         # CONSERVATIVE KEYWORD ASSISTANCE
         strong_stress_phrases = [
-
             # Singlish
             "godak stress",
             "godakma stress",
@@ -582,7 +472,6 @@ class HybridNLPService:
             "hari bayai",
             "focus karaganna ba",
             "kisima deyakata focus karaganna ba",
-
             # English
             "very stressed",
             "extremely stressed",
@@ -592,13 +481,11 @@ class HybridNLPService:
             "completely overwhelmed",
             "cannot focus",
             "can't focus",
-
             # Sinhala
             "ගොඩක් ආතතිය",
             "ලොකු පීඩනය",
             "ගොඩක් බය",
         ]
-
         stress_terms = [
             # English
             "stress",
@@ -621,7 +508,6 @@ class HybridNLPService:
             "බය",
             "අමාරුයි",
         ]
-
         negations = {
             "not", "no", "never", "neither",
             "don't", "dont", "isn't", "isnt",
@@ -642,13 +528,11 @@ class HybridNLPService:
                 rf"(?<!\w){phrase_pattern}(?!\w)",
                 re.IGNORECASE
             )
-
         neutral_spans = [
             match.span()
             for neutral_phrase in neutral_phrases
             for match in phrase_regex(neutral_phrase).finditer(normalized)
         ]
-
         def contains_unnegated(phrase: str) -> bool:
             for match in phrase_regex(phrase).finditer(normalized):
                 # Treat forms such as "stress-free" as non-stress wording.
@@ -659,7 +543,6 @@ class HybridNLPService:
                     for start, end in neutral_spans
                 ):
                     continue
-
                 prefix_words = re.findall(
                     r"[\w']+",
                     normalized[:match.start()]
@@ -677,7 +560,6 @@ class HybridNLPService:
                 routing_score,
                 75
             )
-
         elif any(
                 contains_unnegated(term)
                 for term in stress_terms
@@ -686,28 +568,23 @@ class HybridNLPService:
                 routing_score,
                 50
             )
-
         routing_score = max(0,
             min(
                 routing_score,
                 100
             )
         )
-
         return {
             "label_id": prediction,
-
             "label":
                 (
                     "stress"
                     if prediction == 1
                     else "non_stress"
                 ),
-
             # Raw classifier output
             "probability":
                 model_probability,
-
             # Score used for support/activity routing
             "score":
                 routing_score
@@ -745,7 +622,6 @@ class HybridNLPService:
             "complete kala",
             "iwara kala",
             "weda tika iwara una",
-
             # English
             "i am happy",
             "i'm happy",
@@ -758,7 +634,6 @@ class HybridNLPService:
             "i submitted",
             "good news",
             "great day",
-
             # Sinhala
             "මට සතුටුයි",
             "ගොඩක් සතුටුයි",
@@ -778,7 +653,6 @@ class HybridNLPService:
             "worry",
             "anxious",
             "afraid",
-
             # Singlish
             "baya",
             "bayai",
@@ -787,7 +661,6 @@ class HybridNLPService:
             "epa wela",
             "awul",
             "pressure eka",
-
             # Sinhala
             "ආතතිය",
             "පීඩනය",
@@ -816,19 +689,15 @@ class HybridNLPService:
             stress_level: str,
             emotion: str
     ) -> str:
-
         # Safety always has highest priority
         if risk_level == "HIGH":
             return "SAFETY_SUPPORT"
-
         # High stress -> Mandala Paint Flow
         if stress_level == "HIGH":
             return "MANDALA"
-
         # Moderate stress -> Calm Bubbles
         if stress_level == "MODERATE":
             return "CALM_BUBBLES"
-
         # Low stress -> no activity
         return "NONE"
 
@@ -912,7 +781,6 @@ class HybridNLPService:
         # HIGH-RISK SAFETY RESPONSE
         # Deterministic: Gemini is NOT used here.
         if risk_level == "HIGH":
-
             # Sinhala Unicode
             if language == "SINHALA":
                 return (
@@ -938,7 +806,6 @@ class HybridNLPService:
                     "Me situation eke MindMate games saha "
                     "gamified activities suggest karanne naha."
                 )
-
             # English
             return (
                 "What you shared sounds serious. "
@@ -956,7 +823,6 @@ class HybridNLPService:
                 text
             )
         )
-
         # POSITIVE / ACHIEVEMENT MESSAGE
         if positive_context:
             if language == "SINHALA":
@@ -990,7 +856,6 @@ class HybridNLPService:
                         "ඊට පස්සේ ඔයාට තියෙන දේ ගැන "
                         "අපි කතා කරමු."
                     )
-
                 if language == "SINGLISH":
                     return (
                         "Oyage message eken me welawe "
@@ -1001,7 +866,6 @@ class HybridNLPService:
                         "Passe oyata thiyena de gena "
                         "api katha karamu."
                     )
-
                 return (
                     "Your message suggests that you may be "
                     "under a lot of pressure right now. "
@@ -1032,7 +896,6 @@ class HybridNLPService:
                 "If you'd like, you can tell me more "
                 "about what's going on."
             )
-
         # MODERATE SUPPORT-ROUTING STRESS
         if stress_level == "MODERATE":
             if activity != "NONE":
@@ -1045,7 +908,6 @@ class HybridNLPService:
                         "ගන්න පුළුවන්. "
                         "ඊට පස්සේ මේ ගැන අපි කතා කරමු."
                     )
-
                 if language == "SINGLISH":
                     return (
                         "Oyage message eken tikak pressure "
@@ -1055,7 +917,6 @@ class HybridNLPService:
                         "ganna puluwan. "
                         "Passe me gena api katha karamu."
                     )
-
                 return (
                     "Your message suggests that you may be "
                     "feeling some pressure. "
@@ -1063,7 +924,6 @@ class HybridNLPService:
                     "as a short supportive break. "
                     "Then we can continue talking about it."
                 )
-
             if language == "SINHALA":
                 return (
                     "ඔයාගේ message එකෙන් ටිකක් පීඩනය "
@@ -1071,7 +931,6 @@ class HybridNLPService:
                     "මේකට ප්‍රධාන හේතුව මොකක්ද කියලා "
                     "කතා කරන්න කැමති නම් මට කියන්න."
                 )
-
             if language == "SINGLISH":
                 return (
                     "Oyage message eken tikak pressure "
@@ -1079,14 +938,12 @@ class HybridNLPService:
                     "Mekata main reason eka mokakda kiyala "
                     "katha karanna kemathi nam mata kiyanna."
                 )
-
             return (
                 "Your message suggests that you may be "
                 "feeling some pressure. "
                 "If you'd like, tell me a little more "
                 "about what's causing it."
             )
-
         # LOW / NORMAL MESSAGE
         if language == "SINHALA":
             return (
@@ -1094,14 +951,12 @@ class HybridNLPService:
                 "ඒ ගැන තව ටිකක් කතා කරන්න කැමති නම් "
                 "මට කියන්න."
             )
-
         if language == "SINGLISH":
             return (
                 "Oya kiyapu de mata theruna. "
                 "E gena thawath tikak katha karanna "
                 "kemathi nam mata kiyanna."
             )
-
         return (
             "I understand what you shared. "
             "If you'd like, you can tell me a little more about it."
@@ -1110,12 +965,9 @@ class HybridNLPService:
     # FINAL HYBRID ANALYSIS
     @classmethod
     def analyze(cls, text: str):
-
         if text is None:
             raise ValueError("Message cannot be empty.")
-
         text = str(text).strip()
-
         if not text:
             raise ValueError("Message cannot be empty.")
 
@@ -1175,7 +1027,6 @@ class HybridNLPService:
             )
         )
 
-
         # ACTIVITY SELECTION
         if positive_context:
             # Keep the original model outputs for
@@ -1229,7 +1080,6 @@ class HybridNLPService:
                 "activity": activity
             }
         )
-
         return {
             "reply": reply,
             "intent": intent["label"],
