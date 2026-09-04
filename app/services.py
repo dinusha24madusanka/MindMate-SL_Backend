@@ -827,20 +827,14 @@ class HybridNLPService:
         if positive_context:
             if language == "SINHALA":
                 return (
-                    "ඒක අහන්න ලැබීම සතුටක්. "
-                    "ඔයාට හොඳින් ගිය දෙයක් ගැන "
-                    "කතා කරන්න කැමති නම් මට කියන්න."
+                    "ඒක අහන්න ලැබීම සතුටක්, හොඳින් ගිය දේ ගැන තව ටිකක් කියන්න කැමති නම් මට කියන්න 🌿"
                 )
             if language == "SINGLISH":
                 return (
-                    "Eka ahanna labuna eka sathutui. "
-                    "Oyāta hondin giya de gena thawath "
-                    "katha karanna kemathi nam mata kiyanna."
+                    "Eka ahanna labuna eka sathutui, hondin giya de gana thawath kiyanna kemathi nam mata kiyanna 🌿"
                 )
             return (
-                "I'm glad to hear that. "
-                "If you'd like, you can tell me more "
-                "about what went well."
+                "I'm glad to hear that, and you can share what went well if you'd like 🌿"
             )
 
         # HIGH SUPPORT-ROUTING STRESS
@@ -848,118 +842,64 @@ class HybridNLPService:
             if activity != "NONE":
                 if language == "SINHALA":
                     return (
-                        "ඔයාගේ message එකෙන් මේ වෙලාවේ "
-                        "පීඩනය වැඩි වගේ පේනවා. "
-                        f"ඔයා කැමති නම් {activity_name} "
-                        "වගේ කෙටි supportive activity එකක් "
-                        "කරලා පොඩි විවේකයක් ගන්න පුළුවන්. "
-                        "ඊට පස්සේ ඔයාට තියෙන දේ ගැන "
-                        "අපි කතා කරමු."
+                        f"පීඩනය වැඩි වගේ නම් {activity_name} කරලා පොඩි විවේකයක් ගන්න 🌿"
                     )
                 if language == "SINGLISH":
                     return (
-                        "Oyage message eken me welawe "
-                        "pressure eka wadi wage penenawa. "
-                        f"Oya kemathi nam {activity_name} "
-                        "wage podi supportive activity ekak "
-                        "karala short break ekak ganna puluwan. "
-                        "Passe oyata thiyena de gena "
-                        "api katha karamu."
+                        f"Pressure eka wadi wage nam {activity_name} karala podi break ekak ganna 🌿"
                     )
                 return (
-                    "Your message suggests that you may be "
-                    "under a lot of pressure right now. "
-                    f"If you'd like, you can try {activity_name} "
-                    "as a short supportive break. "
-                    "After that, we can continue talking "
-                    "about what's going on."
+                    f"Pressure feels heavy, so take a short break with {activity_name} 🌿"
                 )
 
             # HIGH stress but activity intentionally suppressed
             if language == "SINHALA":
                 return (
-                    "ඔයාගේ message එකෙන් මේ වෙලාවේ "
-                    "පීඩනය වැඩි වගේ පේනවා. "
-                    "ඔයාට තියෙන දේ ගැන ටිකක් කියන්න "
-                    "කැමති නම් මම අහගෙන ඉන්නවා."
+                    "පීඩනය වැඩි වෙලාවට පොඩි විවේකයක් අරගෙන හිතේ තියෙන දේ කියන්න 🌿"
                 )
             if language == "SINGLISH":
                 return (
-                    "Oyage message eken me welawe "
-                    "pressure eka wadi wage penenawa. "
-                    "Oyata thiyena de gena tikak kiyanna "
-                    "kemathi nam mama ahagena innawa."
+                    "Pressure wadi welawe podi break ekak aran hithe thiyena de kiyanna 🌿"
                 )
             return (
-                "Your message suggests that you may be "
-                "under a lot of pressure right now. "
-                "If you'd like, you can tell me more "
-                "about what's going on."
+                "Pressure feels heavy, so take a short pause and share what's on your mind 🌿"
             )
         # MODERATE SUPPORT-ROUTING STRESS
         if stress_level == "MODERATE":
             if activity != "NONE":
                 if language == "SINHALA":
                     return (
-                        "ඔයාගේ message එකෙන් ටිකක් පීඩනය "
-                        "තියෙන වගේ පේනවා. "
-                        f"ඔයා කැමති නම් {activity_name} "
-                        "වගේ කෙටි supportive break එකක් "
-                        "ගන්න පුළුවන්. "
-                        "ඊට පස්සේ මේ ගැන අපි කතා කරමු."
+                        f"ටිකක් පීඩනයක් තියෙනවා නම් {activity_name} කරලා පොඩි විවේකයක් ගමුද? 🌿"
                     )
                 if language == "SINGLISH":
                     return (
-                        "Oyage message eken tikak pressure "
-                        "thiyena wage penenawa. "
-                        f"Oya kemathi nam {activity_name} "
-                        "wage podi supportive break ekak "
-                        "ganna puluwan. "
-                        "Passe me gena api katha karamu."
+                        f"Tikak pressure nam {activity_name} karala podi break ekak gamuda? 🌿"
                     )
                 return (
-                    "Your message suggests that you may be "
-                    "feeling some pressure. "
-                    f"If you'd like, you can try {activity_name} "
-                    "as a short supportive break. "
-                    "Then we can continue talking about it."
+                    f"If stress feels heavy, try a short break with {activity_name} 🌿"
                 )
             if language == "SINHALA":
                 return (
-                    "ඔයාගේ message එකෙන් ටිකක් පීඩනය "
-                    "තියෙන වගේ පේනවා. "
-                    "මේකට ප්‍රධාන හේතුව මොකක්ද කියලා "
-                    "කතා කරන්න කැමති නම් මට කියන්න."
+                    "මේ පීඩනයට හේතුව ගැන තව ටිකක් කතා කරන්න කැමතිද? මම අහගෙන ඉන්නවා 🌿"
                 )
             if language == "SINGLISH":
                 return (
-                    "Oyage message eken tikak pressure "
-                    "thiyena wage penenawa. "
-                    "Mekata main reason eka mokakda kiyala "
-                    "katha karanna kemathi nam mata kiyanna."
+                    "Me pressure ekata hethuwa gana thawa tikak katha karanna kemathida? 🌿"
                 )
             return (
-                "Your message suggests that you may be "
-                "feeling some pressure. "
-                "If you'd like, tell me a little more "
-                "about what's causing it."
+                "If stress feels difficult, you can share a little more about what's causing it 🌿"
             )
         # LOW / NORMAL MESSAGE
         if language == "SINHALA":
             return (
-                "ඔයා කියපු දේ මට තේරුණා. "
-                "ඒ ගැන තව ටිකක් කතා කරන්න කැමති නම් "
-                "මට කියන්න."
+                "ඔයා කියපු දේ මට තේරුණා, ඒ ගැන තව ටිකක් කියන්න කැමති නම් මම අහගෙන ඉන්නවා 🌿"
             )
         if language == "SINGLISH":
             return (
-                "Oya kiyapu de mata theruna. "
-                "E gena thawath tikak katha karanna "
-                "kemathi nam mata kiyanna."
+                "Oya kiyapu de mata theruna, e gana thawa katha karanna kemathi nam mata kiyanna 🌿"
             )
         return (
-            "I understand what you shared. "
-            "If you'd like, you can tell me a little more about it."
+            "I understand what you shared, so feel free to tell me more if you'd like 🌿"
         )
 
     # FINAL HYBRID ANALYSIS
